@@ -48,12 +48,12 @@ func _draw() -> void:
 	var c := Vector2(360.0, 640.0)
 	# Background
 	draw_rect(Rect2(0, 0, 720, 1280), palette["bg"])
-	# Nebula blobs (soft layered circles)
+	# Nebula blobs (soft layered circles, kept away from the core)
 	for i in 7:
 		var a := _rot * 0.3 + float(i) * 0.9
-		var pos := c + Vector2(cos(a), sin(a * 1.3)) * Vector2(240.0, 420.0) * (0.5 + 0.12 * float(i % 3))
+		var pos := c + Vector2(cos(a), sin(a * 1.3)) * Vector2(300.0, 480.0) * (0.55 + 0.12 * float(i % 3))
 		var col: Color = palette["neb1"] if i % 2 == 0 else palette["neb2"]
-		_draw_soft_circle(pos, 150.0 + float(i % 3) * 50.0, col)
+		_draw_soft_circle(pos, 130.0 + float(i % 3) * 40.0, col)
 	# Grid
 	var grid_col: Color = palette["grid"]
 	for x in range(0, 721, 60):
@@ -83,5 +83,5 @@ func _draw() -> void:
 func _draw_soft_circle(pos: Vector2, radius: float, col: Color) -> void:
 	for i in range(4, 0, -1):
 		var c2 := col
-		c2.a = col.a * (0.25 + 0.2 * float(i))
+		c2.a = col.a * (0.16 + 0.13 * float(i))
 		draw_circle(pos, radius * float(i) / 4.0, c2)

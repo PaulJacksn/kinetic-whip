@@ -25,10 +25,14 @@ var _switch_button: Button
 var _attune_bar: ProgressBar
 var _attune_label: Label
 var _menu_panel: PanelContainer
+var _menu_wrap: CenterContainer
 var _upgrade_panel: PanelContainer
+var _upgrade_wrap: CenterContainer
 var _upgrade_list: VBoxContainer
 var _gameover_panel: PanelContainer
+var _gameover_wrap: CenterContainer
 var _pause_panel: PanelContainer
+var _pause_wrap: CenterContainer
 var _hud_root: Control
 var _best_label: Label
 var _go_score_label: Label
@@ -194,10 +198,21 @@ func _build_hud() -> void:
 	_popup_label.modulate.a = 0.0
 	_hud_root.add_child(_popup_label)
 
+## Panels are wrapped in a full-rect CenterContainer: set_anchors_preset
+## (PRESET_CENTER) at build time mis-centers because the panel has no
+## size yet (its top-left lands on the center and it grows down-right).
+func _center_wrap(panel: PanelContainer) -> CenterContainer:
+	var wrap := CenterContainer.new()
+	wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_child(panel)
+	add_child(wrap)
+	return wrap
+
 func _build_menu() -> void:
 	_menu_panel = PanelContainer.new()
-	_menu_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_menu_panel.custom_minimum_size = Vector2(600, 0)
+	_menu_wrap = _center_wrap(_menu_panel)
 	_menu_panel.add_theme_stylebox_override("panel", _panel_style())
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
@@ -221,12 +236,11 @@ func _build_menu() -> void:
 	var hint := _label("Drag in circles around the core to spin the whip.\nBlue shields break only above 65% spin.\nCollect the orbs. Spend them between waves.", 22, Color(0.65, 0.75, 0.9))
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(hint)
-	add_child(_menu_panel)
 
 func _build_upgrade() -> void:
 	_upgrade_panel = PanelContainer.new()
-	_upgrade_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_upgrade_panel.custom_minimum_size = Vector2(620, 0)
+	_upgrade_wrap = _center_wrap(_upgrade_panel)
 	_upgrade_panel.add_theme_stylebox_override("panel", _panel_style())
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 10)
@@ -244,12 +258,11 @@ func _build_upgrade() -> void:
 	next_btn.add_theme_stylebox_override("normal", _button_style())
 	next_btn.pressed.connect(func() -> void: next_wave.emit())
 	vb.add_child(next_btn)
-	add_child(_upgrade_panel)
 
 func _build_gameover() -> void:
 	_gameover_panel = PanelContainer.new()
-	_gameover_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_gameover_panel.custom_minimum_size = Vector2(560, 0)
+	_gameover_wrap = _center_wrap(_gameover_panel)
 	_gameover_panel.add_theme_stylebox_override("panel", _panel_style())
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
@@ -270,12 +283,11 @@ func _build_gameover() -> void:
 	again_btn.add_theme_stylebox_override("normal", _button_style())
 	again_btn.pressed.connect(func() -> void: restart_game.emit())
 	vb.add_child(again_btn)
-	add_child(_gameover_panel)
 
 func _build_pause() -> void:
 	_pause_panel = PanelContainer.new()
-	_pause_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_pause_panel.custom_minimum_size = Vector2(420, 0)
+	_pause_wrap = _center_wrap(_pause_panel)
 	_pause_panel.add_theme_stylebox_override("panel", _panel_style())
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
@@ -297,7 +309,6 @@ func _build_pause() -> void:
 	restart_btn.add_theme_stylebox_override("normal", _button_style())
 	restart_btn.pressed.connect(func() -> void: restart_game.emit())
 	vb.add_child(restart_btn)
-	add_child(_pause_panel)
 
 # ---------------------------------------------------------------- public API
 
@@ -327,7 +338,7 @@ func set_wave(w: int) -> void:
 	_wave_label.text = "WAVE %d" % w
 
 func set_orbs(n: int) -> void:
-	_orb_label.text = "◆ %d" % n
+	_orb_label.text = "ORB %d" % n
 
 func set_score(n: int) -> void:
 	_score_label.text = str(n)
@@ -357,24 +368,24 @@ func set_best(n: int) -> void:
 
 func show_menu() -> void:
 	_hud_root.visible = false
-	_menu_panel.visible = true
-	_upgrade_panel.visible = false
-	_gameover_panel.visible = false
-	_pause_panel.visible = false
+	_menu_wrap.visible = true
+	_upgrade_wrap.visible = false
+	_gameover_wrap.visible = false
+	_pause_wrap.visible = false
 
 func show_hud() -> void:
 	_hud_root.visible = true
-	_menu_panel.visible = false
-	_upgrade_panel.visible = false
-	_gameover_panel.visible = false
-	_pause_panel.visible = false
+	_menu_wrap.visible = false
+	_upgrade_wrap.visible = false
+	_gameover_wrap.visible = false
+	_pause_wrap.visible = false
 
 func show_upgrade(upgrades: Array, chakra_unlocked: bool, chakra_cost: int, orbs: int) -> void:
 	_hud_root.visible = true
-	_menu_panel.visible = false
-	_gameover_panel.visible = false
-	_pause_panel.visible = false
-	_upgrade_panel.visible = true
+	_menu_wrap.visible = false
+	_gameover_wrap.visible = false
+	_pause_wrap.visible = false
+	_upgrade_wrap.visible = true
 	for child in _upgrade_list.get_children():
 		child.queue_free()
 	for u in upgrades:
@@ -384,7 +395,7 @@ func show_upgrade(upgrades: Array, chakra_unlocked: bool, chakra_cost: int, orbs
 		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_l)
 		var btn := Button.new()
-		btn.text = "◆ %d" % u["cost"]
+		btn.text = "%d ORB" % u["cost"]
 		btn.disabled = orbs < int(u["cost"])
 		btn.add_theme_font_size_override("font_size", 24)
 		btn.add_theme_stylebox_override("normal", _button_style())
@@ -399,7 +410,7 @@ func show_upgrade(upgrades: Array, chakra_unlocked: bool, chakra_cost: int, orbs
 		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_l)
 		var btn := Button.new()
-		btn.text = "◆ %d" % chakra_cost
+		btn.text = "%d ORB" % chakra_cost
 		btn.disabled = orbs < chakra_cost
 		btn.add_theme_font_size_override("font_size", 24)
 		btn.add_theme_stylebox_override("normal", _button_style())
@@ -409,15 +420,15 @@ func show_upgrade(upgrades: Array, chakra_unlocked: bool, chakra_cost: int, orbs
 
 func show_gameover(score: int, best: int, wave: int) -> void:
 	_hud_root.visible = false
-	_menu_panel.visible = false
-	_upgrade_panel.visible = false
-	_pause_panel.visible = false
-	_gameover_panel.visible = true
+	_menu_wrap.visible = false
+	_upgrade_wrap.visible = false
+	_pause_wrap.visible = false
+	_gameover_wrap.visible = true
 	_go_score_label.text = "SCORE %d   BEST %d" % [score, best]
 	_go_wave_label.text = "Reached wave %d" % wave
 
 func show_pause() -> void:
-	_pause_panel.visible = true
+	_pause_wrap.visible = true
 
 func hide_pause() -> void:
-	_pause_panel.visible = false
+	_pause_wrap.visible = false

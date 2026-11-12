@@ -144,12 +144,12 @@ func _draw() -> void:
 	var flicker := 1.0
 	if cond < 0.3 and int(_time * 10.0) % 3 == 0:
 		flicker = 0.45
-	var base_col := Color(0.35, 0.95, 1.0).lerp(Color(0.6, 0.6, 0.6), 1.0 - cond)
+	var base_col := Color(0.5, 1.0, 1.0).lerp(Color(0.7, 0.7, 0.7), 1.0 - cond)
 	# Chain: tapered polyline with glow underlay
 	for pass_i in 2:
-		var w := 7.0 if pass_i == 0 else 3.0
+		var w := 10.0 if pass_i == 0 else 4.5
 		var col := base_col
-		col.a = (0.25 if pass_i == 0 else 0.95) * flicker
+		col.a = (0.4 if pass_i == 0 else 1.0) * flicker
 		for i in range(_points.size() - 1):
 			var t := float(i) / float(_points.size() - 1)
 			var ww := w * (1.0 - t * 0.45)
