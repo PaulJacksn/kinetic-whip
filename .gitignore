@@ -1,0 +1,3 @@
+*.godot/
+.godot/
+verify/headless-test.log
