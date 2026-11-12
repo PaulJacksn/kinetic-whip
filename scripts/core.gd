@@ -9,6 +9,14 @@ var max_integrity: float = 100.0
 var _time: float = 0.0
 var _hit_flash: float = 0.0
 var _ring_rot: float = 0.0
+var _orb_tex: Texture2D = null
+var _glow_tex: Texture2D = null
+
+func _ready() -> void:
+	if ResourceLoader.exists("res://assets/art/core/orb.png"):
+		_orb_tex = load("res://assets/art/core/orb.png")
+	if ResourceLoader.exists("res://assets/art/core/glow.png"):
+		_glow_tex = load("res://assets/art/core/glow.png")
 
 func reset() -> void:
 	integrity = max_integrity
@@ -37,19 +45,27 @@ func _draw() -> void:
 	var glow_col := Color(0.25, 0.85, 1.0)
 	if cond < 0.3:
 		glow_col = Color(1.0, 0.25, 0.2).lerp(Color(0.25, 0.85, 1.0), cond / 0.3)
-	for i in range(5, 0, -1):
-		var c := glow_col
-		c.a = 0.05 + 0.03 * float(i)
-		draw_circle(Vector2.ZERO, RADIUS * pulse * (1.0 + float(i) * 0.28), c)
+	if _glow_tex != null:
+		var gs := RADIUS * 6.0 * pulse
+		draw_texture_rect(_glow_tex, Rect2(-gs * 0.5, -gs * 0.5, gs, gs), false, Color(glow_col, 0.75))
+	else:
+		for i in range(5, 0, -1):
+			var c := glow_col
+			c.a = 0.05 + 0.03 * float(i)
+			draw_circle(Vector2.ZERO, RADIUS * pulse * (1.0 + float(i) * 0.28), c)
 	# Body
-	var body := Color(0.1, 0.55, 0.85).lerp(Color(0.55, 0.12, 0.1), 1.0 - cond)
-	draw_circle(Vector2.ZERO, RADIUS * pulse, body)
-	# Inner bright core
-	var inner := Color(0.85, 0.98, 1.0)
-	if cond < 0.3:
-		inner = Color(1.0, 0.6, 0.5)
-	draw_circle(Vector2.ZERO, RADIUS * 0.55 * pulse, inner)
-	draw_circle(Vector2.ZERO, RADIUS * 0.28 * pulse, Color(1, 1, 1, 0.95))
+	if _orb_tex != null:
+		var os := RADIUS * 2.0 * pulse
+		draw_texture_rect(_orb_tex, Rect2(-os * 0.5, -os * 0.5, os, os), false, Color(1, 1, 1, 0.65 + cond * 0.35))
+	else:
+		var body := Color(0.1, 0.55, 0.85).lerp(Color(0.55, 0.12, 0.1), 1.0 - cond)
+		draw_circle(Vector2.ZERO, RADIUS * pulse, body)
+		# Inner bright core
+		var inner := Color(0.85, 0.98, 1.0)
+		if cond < 0.3:
+			inner = Color(1.0, 0.6, 0.5)
+		draw_circle(Vector2.ZERO, RADIUS * 0.55 * pulse, inner)
+		draw_circle(Vector2.ZERO, RADIUS * 0.28 * pulse, Color(1, 1, 1, 0.95))
 	# Rotating rune ring
 	var ring_col := Color(0.6, 0.95, 1.0, 0.85)
 	for i in 12:

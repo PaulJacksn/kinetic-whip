@@ -26,6 +26,17 @@ var _rng := RandomNumberGenerator.new()
 var _flash: float = 0.0
 var _shield_flash: float = 0.0
 var _boss_max_hp: int = 12
+var _body_tex: Texture2D = null
+var _hurt_tex: Texture2D = null
+var _body_aspect: float = 1.0
+var _has_tex_parts: bool = false
+
+func _load_tex(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		var t := load(path)
+		if t is Texture2D:
+			return t
+	return null
 
 func setup(p_kind: int, p_pos: Vector2, p_core: Vector2, rng: RandomNumberGenerator) -> void:
 	kind = p_kind
@@ -79,8 +90,8 @@ func _accent() -> Color:
 func _metal() -> Color:
 	return Color(0.75, 0.8, 0.88)
 
-func _part(poly: PackedVector2Array, off: Vector2, col: Color, pname: String) -> Dictionary:
-	return {"poly": poly, "off": off, "col": col, "name": pname}
+func _part(poly: PackedVector2Array, off: Vector2, col: Color, pname: String, tex: Texture2D = null, tex_size: Vector2 = Vector2.ZERO, tint: Color = Color.WHITE) -> Dictionary:
+	return {"poly": poly, "off": off, "col": col, "name": pname, "tex": tex, "tex_size": tex_size, "tint": tint}
 
 func _rect_poly(w: float, h: float) -> PackedVector2Array:
 	return PackedVector2Array([Vector2(-w / 2, -h / 2), Vector2(w / 2, -h / 2), Vector2(w / 2, h / 2), Vector2(-w / 2, h / 2)])
@@ -94,31 +105,58 @@ func _oct_poly(r: float) -> PackedVector2Array:
 
 func _build_parts() -> void:
 	parts.clear()
+	_body_tex = null
+	_hurt_tex = null
+	_body_aspect = 1.0
+	_has_tex_parts = false
 	var m := _metal()
 	var a := _accent()
 	var r := radius
-	if kind == Kind.BOSS:
-		parts.append(_part(_rect_poly(r * 1.1, r * 0.9), Vector2(0, 0), m, "torso"))
-		parts.append(_part(_oct_poly(r * 0.42), Vector2(0, -r * 0.62), a, "head"))
-		parts.append(_part(_rect_poly(r * 0.5, r * 0.28), Vector2(-r * 0.62, -r * 0.35), m, "shoulder_l"))
-		parts.append(_part(_rect_poly(r * 0.5, r * 0.28), Vector2(r * 0.62, -r * 0.35), m, "shoulder_r"))
-		parts.append(_part(_rect_poly(r * 0.22, r * 0.8), Vector2(-r * 0.55, r * 0.15), m, "arm_l"))
-		parts.append(_part(_rect_poly(r * 0.22, r * 0.8), Vector2(r * 0.55, r * 0.15), m, "arm_r"))
-		parts.append(_part(_rect_poly(r * 0.3, r * 0.4), Vector2(-r * 0.3, r * 0.62), Color(0.5, 0.55, 0.65), "leg_l"))
-		parts.append(_part(_rect_poly(r * 0.3, r * 0.4), Vector2(r * 0.3, r * 0.62), Color(0.5, 0.55, 0.65), "leg_r"))
-		parts.append(_part(_oct_poly(r * 0.2), Vector2(0, -r * 1.05), Color(1.0, 0.8, 0.2), "crown"))
-		parts.append(_part(_rect_poly(r * 0.9, r * 0.18), Vector2(0, r * 0.28), a, "chestplate"))
-		parts.append(_part(_oct_poly(r * 0.14), Vector2(-r * 0.25, -r * 0.62), Color(1, 1, 1), "eye_l"))
-		parts.append(_part(_oct_poly(r * 0.14), Vector2(r * 0.25, -r * 0.62), Color(1, 1, 1), "eye_r"))
-	else:
-		parts.append(_part(_rect_poly(r * 0.95, r * 0.85), Vector2(0, 0), m, "torso"))
-		parts.append(_part(_oct_poly(r * 0.38), Vector2(0, -r * 0.58), a, "head"))
-		parts.append(_part(_rect_poly(r * 0.2, r * 0.7), Vector2(-r * 0.52, r * 0.1), m, "arm_l"))
-		parts.append(_part(_rect_poly(r * 0.2, r * 0.7), Vector2(r * 0.52, r * 0.1), m, "arm_r"))
-		parts.append(_part(_rect_poly(r * 0.26, r * 0.42), Vector2(-r * 0.26, r * 0.58), Color(0.5, 0.55, 0.65), "leg_l"))
-		parts.append(_part(_rect_poly(r * 0.26, r * 0.42), Vector2(r * 0.26, r * 0.58), Color(0.5, 0.55, 0.65), "leg_r"))
-		if kind == Kind.RANGED:
-			parts.append(_part(_rect_poly(r * 0.5, r * 0.16), Vector2(0, -r * 0.28), Color(1.0, 0.5, 0.25), "cannon"))
+	if kind == Kind.STANDARD or kind == Kind.SHIELDED:
+		# Real sliced sprites (ArtManOil). Offsets measured on the 48x48
+		# frame (robot center 23,23), drawn at 2x. Shielded reuses the same
+		# parts with a blue tint; the shield ring marks it.
+		var tint := Color(0.72, 0.85, 1.5) if kind == Kind.SHIELDED else Color.WHITE
+		parts.append(_part(_rect_poly(r * 1.31, r * 0.54), Vector2(0, r * 0.27), m, "torso", _load_tex("res://assets/art/robots/standard_torso.png"), Vector2(r * 1.31, r * 0.54), tint))
+		parts.append(_part(_oct_poly(r * 0.38), Vector2(0, -r * 0.54), a, "head", _load_tex("res://assets/art/robots/standard_head.png"), Vector2(r * 1.15, r * 1.08), tint))
+		parts.append(_part(_rect_poly(r * 0.23, r * 0.85), Vector2(-r * 0.58, r * 0.42), m, "arm_l", _load_tex("res://assets/art/robots/standard_arm_l.png"), Vector2(r * 0.23, r * 0.85), tint))
+		parts.append(_part(_rect_poly(r * 0.23, r * 0.85), Vector2(r * 0.65, r * 0.42), m, "arm_r", _load_tex("res://assets/art/robots/standard_arm_r.png"), Vector2(r * 0.23, r * 0.85), tint))
+		parts.append(_part(_rect_poly(r * 0.69, r * 0.69), Vector2(-r * 0.35, r * 0.88), Color(0.5, 0.55, 0.65), "leg_l", _load_tex("res://assets/art/robots/standard_leg_l.png"), Vector2(r * 0.69, r * 0.69), tint))
+		parts.append(_part(_rect_poly(r * 0.69, r * 0.69), Vector2(r * 0.42, r * 0.88), Color(0.5, 0.55, 0.65), "leg_r", _load_tex("res://assets/art/robots/standard_leg_r.png"), Vector2(r * 0.69, r * 0.69), tint))
+		_has_tex_parts = true
+		return
+	if kind == Kind.RANGED:
+		# Rigid hover drone (Sova): one whole-body sprite, no separable
+		# limbs. Parts exist for HP only; their debris uses the body texture.
+		_body_tex = _load_tex("res://assets/art/robots/ranged_idle.png")
+		_hurt_tex = _load_tex("res://assets/art/robots/ranged_hurt.png")
+		_body_aspect = 128.0 / 148.0
+		var chunk := Vector2(r * 0.7, r * 0.7)
+		parts.append(_part(_rect_poly(r * 0.95, r * 0.85), Vector2(0, 0), m, "torso", _body_tex, chunk))
+		parts.append(_part(_oct_poly(r * 0.38), Vector2(0, -r * 0.58), a, "head", _body_tex, chunk))
+		parts.append(_part(_rect_poly(r * 0.2, r * 0.7), Vector2(-r * 0.52, r * 0.1), m, "arm_l", _body_tex, chunk))
+		parts.append(_part(_rect_poly(r * 0.2, r * 0.7), Vector2(r * 0.52, r * 0.1), m, "arm_r", _body_tex, chunk))
+		parts.append(_part(_rect_poly(r * 0.26, r * 0.42), Vector2(-r * 0.26, r * 0.58), Color(0.5, 0.55, 0.65), "leg_l", _body_tex, chunk))
+		parts.append(_part(_rect_poly(r * 0.26, r * 0.42), Vector2(r * 0.26, r * 0.58), Color(0.5, 0.55, 0.65), "leg_r", _body_tex, chunk))
+		parts.append(_part(_rect_poly(r * 0.5, r * 0.16), Vector2(0, -r * 0.28), Color(1.0, 0.5, 0.25), "cannon", _body_tex, chunk))
+		return
+	# BOSS: whole-body red drone sprite + a real crown icon on top.
+	_body_tex = _load_tex("res://assets/art/robots/boss_idle.png")
+	_body_aspect = 192.0 / 222.0
+	var crown_tex := _load_tex("res://assets/art/robots/boss_crown.png")
+	var bchunk := Vector2(r * 0.7, r * 0.7)
+	parts.append(_part(_rect_poly(r * 1.1, r * 0.9), Vector2(0, 0), m, "torso", _body_tex, bchunk))
+	parts.append(_part(_oct_poly(r * 0.42), Vector2(0, -r * 0.62), a, "head", _body_tex, bchunk))
+	parts.append(_part(_rect_poly(r * 0.5, r * 0.28), Vector2(-r * 0.62, -r * 0.35), m, "shoulder_l", _body_tex, bchunk))
+	parts.append(_part(_rect_poly(r * 0.5, r * 0.28), Vector2(r * 0.62, -r * 0.35), m, "shoulder_r", _body_tex, bchunk))
+	parts.append(_part(_rect_poly(r * 0.22, r * 0.8), Vector2(-r * 0.55, r * 0.15), m, "arm_l", _body_tex, bchunk))
+	parts.append(_part(_rect_poly(r * 0.22, r * 0.8), Vector2(r * 0.55, r * 0.15), m, "arm_r", _body_tex, bchunk))
+	parts.append(_part(_rect_poly(r * 0.3, r * 0.4), Vector2(-r * 0.3, r * 0.62), Color(0.5, 0.55, 0.65), "leg_l", _body_tex, bchunk))
+	parts.append(_part(_rect_poly(r * 0.3, r * 0.4), Vector2(r * 0.3, r * 0.62), Color(0.5, 0.55, 0.65), "leg_r", _body_tex, bchunk))
+	parts.append(_part(_oct_poly(r * 0.2), Vector2(0, -r * 1.05), Color(1.0, 0.8, 0.2), "crown", crown_tex, Vector2(r * 0.62, r * 0.62)))
+	parts.append(_part(_rect_poly(r * 0.9, r * 0.18), Vector2(0, r * 0.28), a, "chestplate", _body_tex, bchunk))
+	parts.append(_part(_oct_poly(r * 0.14), Vector2(-r * 0.25, -r * 0.62), Color(1, 1, 1), "eye_l", _body_tex, Vector2(r * 0.5, r * 0.5)))
+	parts.append(_part(_oct_poly(r * 0.14), Vector2(r * 0.25, -r * 0.62), Color(1, 1, 1), "eye_r", _body_tex, Vector2(r * 0.5, r * 0.5)))
 
 func hp() -> int:
 	return parts.size()
@@ -198,22 +236,44 @@ func _draw() -> void:
 	# Glow under the robot
 	var ac := _accent()
 	draw_circle(Vector2.ZERO, radius * 1.15, Color(ac, 0.14))
-	# Parts
-	for part in parts:
-		var poly: PackedVector2Array = part["poly"]
-		var off: Vector2 = part["off"]
-		var moved := PackedVector2Array()
-		for p in poly:
-			moved.append(p + off)
-		var col: Color = part["col"]
-		if _flash > 0.0:
-			col = col.lerp(Color(1, 1, 1), _flash * 0.7)
-		draw_colored_polygon(moved, col)
-		var outline := PackedVector2Array(moved)
-		outline.append(moved[0])
-		draw_polyline(outline, Color(0.05, 0.06, 0.1, 0.9), 1.5)
-	# Eye glow on the head
-	if not parts.is_empty():
+	var mod := Color(1, 1, 1)
+	if _flash > 0.0:
+		mod = Color(1, 1, 1).lerp(Color(2, 2, 2), _flash * 0.7)
+	if _body_tex != null:
+		# Whole-body sprite (rigid drone / boss). Hurt frame when half gone.
+		var btex: Texture2D = _body_tex
+		if _hurt_tex != null and parts.size() <= max_hp() / 2:
+			btex = _hurt_tex
+		var bsize := Vector2(radius * 2.0, radius * 2.0 * _body_aspect)
+		draw_texture_rect(btex, Rect2(-bsize * 0.5, bsize), false, mod)
+		# The crown is the only separately drawn part on a body sprite.
+		for part in parts:
+			if String(part["name"]) == "crown" and part["tex"] != null:
+				var cts: Vector2 = part["tex_size"]
+				var coff: Vector2 = part["off"]
+				draw_texture_rect(part["tex"], Rect2(coff - cts * 0.5, cts), false, mod)
+	else:
+		# Parts: real sliced sprites for standard/shielded, polygons fallback.
+		for part in parts:
+			var off: Vector2 = part["off"]
+			if part["tex"] != null:
+				var ts: Vector2 = part["tex_size"]
+				var tint: Color = part["tint"]
+				draw_texture_rect(part["tex"], Rect2(off - ts * 0.5, ts), false, mod * tint)
+			else:
+				var poly: PackedVector2Array = part["poly"]
+				var moved := PackedVector2Array()
+				for p in poly:
+					moved.append(p + off)
+				var col: Color = part["col"]
+				if _flash > 0.0:
+					col = col.lerp(Color(1, 1, 1), _flash * 0.7)
+				draw_colored_polygon(moved, col)
+				var outline := PackedVector2Array(moved)
+				outline.append(moved[0])
+				draw_polyline(outline, Color(0.05, 0.06, 0.1, 0.9), 1.5)
+	# Eye glow (only for polygon-drawn robots; sprite heads have eyes).
+	if not _has_tex_parts and _body_tex == null and not parts.is_empty():
 		draw_circle(Vector2(0, -radius * 0.58), 3.0, Color(1, 1, 1, 0.9))
 	# Shield ring
 	if shield_on:

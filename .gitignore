@@ -1,3 +1,15 @@
 *.godot/
 .godot/
 verify/headless-test.log
+
+# Third-party art/audio binaries are NOT in this public repo: their licences
+# allow use in the game but forbid redistributing the raw files (ArtManOil,
+# Sova Digital, reodesuxz, Sonniss). They live only in the local assets/
+# folder and are baked into the web export. The manifests (assets/ASSETS.md,
+# assets/audio/AUDIO.md) ARE tracked: re-download the packs from the sources
+# listed there to rebuild locally with real assets. Without them the game
+# falls back to procedural art/audio.
+assets/**/*.png
+assets/**/*.wav
+assets/**/*.ttf
+assets/**/*.txt

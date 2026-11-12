@@ -25,6 +25,7 @@ var _exp_table: PackedFloat32Array
 var _hit_stream: AudioStreamWAV
 var _shatter_stream: AudioStreamWAV
 var _shield_stream: AudioStreamWAV
+var _deflect_stream: AudioStreamWAV
 var _orb_stream: AudioStreamWAV
 var _alarm_stream: AudioStreamWAV
 var _upgrade_stream: AudioStreamWAV
@@ -41,8 +42,38 @@ func _ready() -> void:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
 		_sfx_players.append(p)
+	# Real audio first: any file that exists replaces the procedural sound.
+	_load_real_audio()
 	_generate_sfx()
-	_generate_music()
+	if not music_ready:
+		_generate_music()
+
+## Loads a real WAV if the file exists, else null (procedural fallback).
+func _load_wav(path: String) -> AudioStreamWAV:
+	if ResourceLoader.exists(path):
+		var r := load(path)
+		if r is AudioStreamWAV:
+			return r
+	return null
+
+func _load_real_audio() -> void:
+	_hit_stream = _load_wav("res://assets/audio/sfx/hit.wav")
+	_shatter_stream = _load_wav("res://assets/audio/sfx/shatter.wav")
+	_shield_stream = _load_wav("res://assets/audio/sfx/shield_break.wav")
+	_deflect_stream = _load_wav("res://assets/audio/sfx/deflect.wav")
+	_orb_stream = _load_wav("res://assets/audio/sfx/orb.wav")
+	_alarm_stream = _load_wav("res://assets/audio/sfx/alarm.wav")
+	_upgrade_stream = _load_wav("res://assets/audio/sfx/upgrade.wav")
+	_corehit_stream = _load_wav("res://assets/audio/sfx/core_hit.wav")
+	_unlock_stream = _load_wav("res://assets/audio/sfx/unlock.wav")
+	_wave_stream = _load_wav("res://assets/audio/sfx/wave_clear.wav")
+	var music := _load_wav("res://assets/audio/music/cinematic_loop.wav")
+	if music != null:
+		music.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		music.loop_begin = 0
+		music.loop_end = int(music.get_length() * music.mix_rate)
+		music_player.stream = music
+		music_ready = true
 
 func _build_tables() -> void:
 	_sine_table = PackedFloat32Array()
@@ -155,41 +186,47 @@ func _make_tone_stream(duration: float, fn: Callable) -> AudioStreamWAV:
 	stream.data = data
 	return stream
 
+# Generates a tone stream only when no real file was loaded for the slot.
+func _gen_or_null(existing: AudioStreamWAV, duration: float, fn: Callable) -> AudioStreamWAV:
+	if existing != null:
+		return existing
+	return _make_tone_stream(duration, fn)
+
 func _generate_sfx() -> void:
 	# Whip hit: metallic clink (2 kHz ping + noise tick)
-	_hit_stream = _make_tone_stream(0.18, func(t: float, _i: int) -> float:
+	_hit_stream = _gen_or_null(_hit_stream, 0.18, func(t: float, _i: int) -> float:
 		var s := _sin(TAU * 2093.0 * t) * _exp(t * 30.0) * 0.5
 		s += _sin(TAU * 2637.0 * t) * _exp(t * 36.0) * 0.3
 		s += randf_range(-1.0, 1.0) * _exp(t * 60.0) * 0.25
 		return s
 	)
 	# Shatter: noise burst + descending tones
-	_shatter_stream = _make_tone_stream(0.45, func(t: float, _i: int) -> float:
+	_shatter_stream = _gen_or_null(_shatter_stream, 0.45, func(t: float, _i: int) -> float:
 		var s := randf_range(-1.0, 1.0) * _exp(t * 9.0) * 0.55
 		s += _sin(TAU * (880.0 - 1400.0 * t) * t) * _exp(t * 10.0) * 0.35
 		s += _sin(TAU * (1320.0 - 1800.0 * t) * t) * _exp(t * 12.0) * 0.2
 		return s
 	)
 	# Shield break: glassy high ping
-	_shield_stream = _make_tone_stream(0.4, func(t: float, _i: int) -> float:
+	_shield_stream = _gen_or_null(_shield_stream, 0.4, func(t: float, _i: int) -> float:
 		var s := _sin(TAU * 1760.0 * t) * _exp(t * 8.0) * 0.5
 		s += _sin(TAU * 2349.0 * t) * _exp(t * 9.0) * 0.35
 		s += randf_range(-1.0, 1.0) * _exp(t * 25.0) * 0.2
 		return s
 	)
 	# Orb pickup: rising blip
-	_orb_stream = _make_tone_stream(0.16, func(t: float, _i: int) -> float:
+	_orb_stream = _gen_or_null(_orb_stream, 0.16, func(t: float, _i: int) -> float:
 		return _sin(TAU * (1046.0 + 1200.0 * t) * t) * _exp(t * 18.0) * 0.5
 	)
 	# Boss alarm: low horn swell
-	_alarm_stream = _make_tone_stream(0.9, func(t: float, _i: int) -> float:
+	_alarm_stream = _gen_or_null(_alarm_stream, 0.9, func(t: float, _i: int) -> float:
 		var env := sin(PI * clampf(t / 0.9, 0.0, 1.0))
 		var s := _sin(TAU * 110.0 * t) * env * 0.5
 		s += _sin(TAU * 164.81 * t) * env * 0.35
 		return s
 	)
 	# Upgrade: rising chime arpeggio
-	_upgrade_stream = _make_tone_stream(0.6, func(t: float, _i: int) -> float:
+	_upgrade_stream = _gen_or_null(_upgrade_stream, 0.6, func(t: float, _i: int) -> float:
 		var s := 0.0
 		var notes := [523.25, 659.25, 783.99, 1046.5]
 		for n in 4:
@@ -199,14 +236,14 @@ func _generate_sfx() -> void:
 		return s
 	)
 	# Core hit: low thud
-	_corehit_stream = _make_tone_stream(0.5, func(t: float, _i: int) -> float:
+	_corehit_stream = _gen_or_null(_corehit_stream, 0.5, func(t: float, _i: int) -> float:
 		var phase := TAU * (40.0 * t + 60.0 * (1.0 - _exp(t * 9.0)) / 9.0)
 		var s := _sin(phase) * _exp(t * 7.0) * 0.9
 		s += randf_range(-1.0, 1.0) * _exp(t * 20.0) * 0.3
 		return s
 	)
 	# Unlock: bright fanfare
-	_unlock_stream = _make_tone_stream(0.8, func(t: float, _i: int) -> float:
+	_unlock_stream = _gen_or_null(_unlock_stream, 0.8, func(t: float, _i: int) -> float:
 		var s := 0.0
 		var notes := [392.0, 523.25, 659.25, 783.99]
 		for n in 4:
@@ -216,7 +253,7 @@ func _generate_sfx() -> void:
 		return s
 	)
 	# Wave clear: soft major chime
-	_wave_stream = _make_tone_stream(0.7, func(t: float, _i: int) -> float:
+	_wave_stream = _gen_or_null(_wave_stream, 0.7, func(t: float, _i: int) -> float:
 		var s := _sin(TAU * 659.25 * t) * _exp(t * 6.0) * 0.4
 		if t > 0.12:
 			s += _sin(TAU * 987.77 * (t - 0.12)) * _exp((t - 0.12) * 6.0) * 0.35
@@ -255,7 +292,10 @@ func play_shield_break() -> void:
 	_play(_shield_stream, 1.0, -3.0)
 
 func play_deflect() -> void:
-	_play(_shield_stream, 1.6, -9.0)
+	if _deflect_stream != null:
+		_play(_deflect_stream, 1.0, -6.0)
+	else:
+		_play(_shield_stream, 1.6, -9.0)
 
 func play_orb(combo: int) -> void:
 	_play(_orb_stream, 1.0 + minf(combo, 16) * 0.03, -8.0)

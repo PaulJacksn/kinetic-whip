@@ -40,8 +40,18 @@ var _go_wave_label: Label
 var _flash_rect: ColorRect
 var _popup_label: Label
 var _popup_timer: float = 0.0
+var _panel_tex: Texture2D = null
+
+func _load_ui_assets() -> void:
+	if ResourceLoader.exists("res://assets/fonts/KenneyFuture.ttf"):
+		var font := load("res://assets/fonts/KenneyFuture.ttf")
+		if font is Font:
+			ThemeDB.fallback_font = font
+	if ResourceLoader.exists("res://assets/art/ui/panel.png"):
+		_panel_tex = load("res://assets/art/ui/panel.png")
 
 func _ready() -> void:
+	_load_ui_assets()
 	_build_hud()
 	_build_menu()
 	_build_upgrade()
@@ -56,7 +66,19 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- styling
 
-func _panel_style() -> StyleBoxFlat:
+func _panel_style() -> StyleBox:
+	if _panel_tex != null:
+		var st := StyleBoxTexture.new()
+		st.texture = _panel_tex
+		st.texture_margin_left = 24.0
+		st.texture_margin_right = 24.0
+		st.texture_margin_top = 24.0
+		st.texture_margin_bottom = 24.0
+		st.content_margin_left = 24.0
+		st.content_margin_right = 24.0
+		st.content_margin_top = 20.0
+		st.content_margin_bottom = 20.0
+		return st
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.05, 0.06, 0.12, 0.92)
 	s.border_color = Color(0.3, 0.8, 1.0, 0.6)
@@ -68,7 +90,10 @@ func _panel_style() -> StyleBoxFlat:
 	s.content_margin_bottom = 20.0
 	return s
 
-func _button_style() -> StyleBoxFlat:
+func _button_style() -> StyleBox:
+	# The Kenney header texture is a bad fit for text buttons: its blue
+	# header band ends mid-button, so white text straddles the blue/grey
+	# seam and turns unreadable. Flat blue buttons stay readable.
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.1, 0.35, 0.55, 1.0)
 	s.set_corner_radius_all(10)
@@ -236,6 +261,9 @@ func _build_menu() -> void:
 	var hint := _label("Drag in circles around the core to spin the whip.\nBlue shields break only above 65% spin.\nCollect the orbs. Spend them between waves.", 22, Color(0.65, 0.75, 0.9))
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(hint)
+	var credits := _label("\"Energy Ball\" by yiannisd (CC-BY 3.0)  •  Icons by Lorc & Delapouite, game-icons.net (CC-BY 3.0)", 16, Color(0.5, 0.6, 0.75))
+	credits.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(credits)
 
 func _build_upgrade() -> void:
 	_upgrade_panel = PanelContainer.new()

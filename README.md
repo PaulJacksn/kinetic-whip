@@ -15,9 +15,8 @@ spend on upgrades between waves. A boss arrives after every 3 waves.
 - Free with in-app purchases (revives, weapon skins) — store plumbing
   is not in v1; v1 is gameplay only
 - Portrait, bird's-eye, endless waves, 60fps target
-- All art and audio is procedural (vector-style drawing, synthesized
-  cinematic loop + SFX). Real Sonniss GDC SFX can replace the
-  procedural SFX later.
+- v2: real art + real audio (see below). Without the local assets/ files
+  the game falls back to procedural art/audio, so a fresh clone still runs.
 
 ## Play
 
@@ -27,7 +26,29 @@ Web build: https://pauljacksn.github.io/kinetic-whip/
 
 1. Open the project with Godot 4.7.2.
 2. Run the headless verification: `godot --headless --path . test.tscn`
+   and `godot --headless --path . test_chain.tscn`
 3. Export Web (single-threaded) from the editor or via CLI.
+
+## v2 (rework)
+
+- Chain physics reworked to feel like a whip: per-link mass taper (heavy
+  hand, light tip), tip-biased damping, centrifugal extension with spin,
+  droop when spin dies, anchor pulls only the first links so the chain
+  lags, curves and trails. Hit deflection ("bite") + hit-stop on kills.
+  Headless chain-feel test: `godot --headless --path . test_chain.tscn`
+  (7 checks: spin, extension, tip speed vs hand speed, lag, collapse,
+  reversal weight).
+- Real art: ArtManOil + Sova Digital robots, reodesuxz sci-fi floor,
+  yiannisd "Energy Ball" core (CC-BY), Lorc/Delapouite game-icons weapons
+  (CC-BY), Kenney UI + font (CC0). Full manifest: `assets/ASSETS.md`.
+  In-game credits on the menu cover the CC-BY lines.
+- Real audio: Sonniss GDC 2026 SFX (royalty-free commercial, no
+  attribution) + Mixkit "Cyberpunk City" music loop (free commercial).
+  Full manifest: `assets/audio/AUDIO.md`.
+- Lighting/juice: glow, CanvasModulate + point lights, impact bursts,
+  flash lights, floating damage numbers, tip speed streak.
+- Asset binaries are NOT in this repo (public; their licences forbid
+  redistributing the raw files). See .gitignore + the manifests.
 
 ## v1 scope
 

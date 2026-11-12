@@ -18,9 +18,12 @@ var _pylons: Array[Vector2] = []
 var _ring_radii: Array[float] = [210.0, 330.0, 460.0]
 var _rot: float = 0.0
 var _rng := RandomNumberGenerator.new()
+var _floor_tex: Texture2D = null
 
 func _ready() -> void:
 	_rng.randomize()
+	if ResourceLoader.exists("res://assets/art/arena/floor.png"):
+		_floor_tex = load("res://assets/art/arena/floor.png")
 	for i in 130:
 		_stars.append(Vector3(_rng.randf_range(0.0, 720.0), _rng.randf_range(0.0, 1280.0), _rng.randf_range(0.4, 1.6)))
 	_layout_wave(1)
@@ -46,20 +49,31 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var c := Vector2(360.0, 640.0)
-	# Background
-	draw_rect(Rect2(0, 0, 720, 1280), palette["bg"])
+	if _floor_tex != null:
+		# Real textured floor, tiled; palette tint washes over it per wave.
+		var ts := _floor_tex.get_size()
+		var sx := int(ceil(720.0 / ts.x))
+		var sy := int(ceil(1280.0 / ts.y))
+		for ix in sx:
+			for iy in sy:
+				draw_texture(_floor_tex, Vector2(ix * ts.x, iy * ts.y))
+		var tint: Color = palette["bg"]
+		tint.a = 0.28
+		draw_rect(Rect2(0, 0, 720, 1280), tint)
+	else:
+		# Fallback: flat background + grid (only when no floor texture).
+		draw_rect(Rect2(0, 0, 720, 1280), palette["bg"])
+		var grid_col: Color = palette["grid"]
+		for x in range(0, 721, 60):
+			draw_line(Vector2(x, 0), Vector2(x, 1280), grid_col, 1.0)
+		for y in range(0, 1281, 60):
+			draw_line(Vector2(0, y), Vector2(720, y), grid_col, 1.0)
 	# Nebula blobs (soft layered circles, kept away from the core)
 	for i in 7:
 		var a := _rot * 0.3 + float(i) * 0.9
 		var pos := c + Vector2(cos(a), sin(a * 1.3)) * Vector2(300.0, 480.0) * (0.55 + 0.12 * float(i % 3))
 		var col: Color = palette["neb1"] if i % 2 == 0 else palette["neb2"]
 		_draw_soft_circle(pos, 130.0 + float(i % 3) * 40.0, col)
-	# Grid
-	var grid_col: Color = palette["grid"]
-	for x in range(0, 721, 60):
-		draw_line(Vector2(x, 0), Vector2(x, 1280), grid_col, 1.0)
-	for y in range(0, 1281, 60):
-		draw_line(Vector2(0, y), Vector2(720, y), grid_col, 1.0)
 	# Concentric rings around the core
 	for r in _ring_radii:
 		draw_arc(c, r, 0.0, TAU, 96, palette["ring"], 1.5)

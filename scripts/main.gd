@@ -52,6 +52,13 @@ var _last_hud_orbs: int = -1
 var _last_hud_score: int = -1
 var _debug_timer: float = 0.0
 var _menu_spin: float = 0.0
+var _hitstop_left: float = 0.0
+var _radial_tex: Texture2D
+var _tip_light: PointLight2D
+var _flash_lights: Array = []
+var _bursts: Array = []
+var _dmg_labels: Array = []
+var _dmg_life: Array = []
 
 var _arena: Node2D
 var _core: Node2D
@@ -110,13 +117,137 @@ func _ready() -> void:
 	_hud.set_best(best_score)
 	_hud.show_menu()
 	_apply_weapon_visibility()
+	_setup_lighting()
+	_setup_juice()
 
 func weapon_condition() -> float:
 	return _core.condition()
 
+# ---------------------------------------------------------------- lighting + juice
+
+func _radial_texture(size: int) -> ImageTexture:
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var half := size * 0.5
+	for y in size:
+		for x in size:
+			var d := Vector2(float(x) - half, float(y) - half).length() / half
+			var a := clampf(1.0 - d, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a * a))
+	return ImageTexture.create_from_image(img)
+
+func _setup_lighting() -> void:
+	# Glow + tonemap for the whole scene (GL Compatibility supports glow).
+	var we := WorldEnvironment.new()
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.015, 0.01, 0.05)
+	env.glow_enabled = true
+	env.glow_intensity = 0.8
+	env.glow_strength = 1.3
+	env.glow_bloom = 0.08
+	we.environment = env
+	add_child(we)
+	# Darken the canvas so the lights punch through.
+	var mod := CanvasModulate.new()
+	mod.color = Color(0.68, 0.7, 0.78)
+	add_child(mod)
+	_radial_tex = _radial_texture(128)
+	# Core light: the glowing orb lights the arena.
+	var core_light := PointLight2D.new()
+	core_light.texture = _radial_tex
+	core_light.color = Color(0.4, 0.85, 1.0)
+	core_light.energy = 1.3
+	core_light.texture_scale = 3.4
+	_core.add_child(core_light)
+	# Tip light: follows the blade tip / chakra disc.
+	_tip_light = PointLight2D.new()
+	_tip_light.texture = _radial_tex
+	_tip_light.color = Color(0.5, 1.0, 1.0)
+	_tip_light.energy = 0.7
+	_tip_light.texture_scale = 1.6
+	_world.add_child(_tip_light)
+	# Flash lights: pooled, fired on kills and shield breaks.
+	for i in 3:
+		var fl := PointLight2D.new()
+		fl.texture = _radial_tex
+		fl.energy = 0.0
+		fl.texture_scale = 2.2
+		_world.add_child(fl)
+		_flash_lights.append(fl)
+
+func _setup_juice() -> void:
+	# Impact burst particles (CPU particles: safe on web + mobile).
+	for i in 6:
+		var p := CPUParticles2D.new()
+		p.amount = 24
+		p.lifetime = 0.55
+		p.one_shot = true
+		p.explosiveness = 0.92
+		p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+		p.emission_sphere_radius = 8.0
+		p.direction = Vector2(0, -1)
+		p.spread = 180.0
+		p.initial_velocity_min = 120.0
+		p.initial_velocity_max = 420.0
+		p.gravity = Vector2.ZERO
+		p.damping_min = 60.0
+		p.damping_max = 140.0
+		p.scale_amount_min = 2.0
+		p.scale_amount_max = 5.0
+		p.color = Color(1, 0.8, 0.4)
+		p.emitting = false
+		_world.add_child(p)
+		_bursts.append(p)
+	# Floating damage numbers.
+	for i in 10:
+		var l := Label.new()
+		l.add_theme_font_size_override("font_size", 24)
+		l.add_theme_color_override("font_color", Color(1, 0.95, 0.6))
+		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		l.add_theme_constant_override("outline_size", 6)
+		l.modulate.a = 0.0
+		_world.add_child(l)
+		_dmg_labels.append(l)
+		_dmg_life.append(0.0)
+
+func _burst(pos: Vector2, col: Color, strength: float = 1.0) -> void:
+	for p in _bursts:
+		if not p.emitting:
+			p.position = pos
+			p.color = col
+			p.amount = int(20.0 * strength)
+			p.restart()
+			p.emitting = true
+			return
+
+func _flash_light(pos: Vector2, col: Color, energy: float = 2.5) -> void:
+	for fl in _flash_lights:
+		if fl.energy <= 0.05:
+			fl.position = pos
+			fl.color = col
+			fl.energy = energy
+			return
+
+func _hitstop(dur: float) -> void:
+	Engine.time_scale = 0.05
+	_hitstop_left = dur
+
+func spawn_damage_number(pos: Vector2, text: String, col: Color) -> void:
+	for i in _dmg_labels.size():
+		if _dmg_life[i] <= 0.0:
+			var l: Label = _dmg_labels[i]
+			l.text = text
+			l.position = pos + Vector2(-20, -30)
+			l.add_theme_color_override("font_color", col)
+			l.modulate.a = 1.0
+			_dmg_life[i] = 0.8
+			return
+
 # ---------------------------------------------------------------- state flow
 
 func start_game() -> void:
+	Engine.time_scale = 1.0
+	_hitstop_left = 0.0
 	score = 0
 	orbs = 0
 	kills = 0
@@ -157,6 +288,8 @@ func start_game() -> void:
 	_start_wave(1)
 
 func _game_over() -> void:
+	Engine.time_scale = 1.0
+	_hitstop_left = 0.0
 	state = State.GAMEOVER
 	_attuning = false
 	_audio.duck_music(true)
@@ -378,6 +511,34 @@ func _process(delta: float) -> void:
 	if _debug_timer >= 0.25:
 		_debug_timer = 0.0
 		_update_debug_hook()
+	# Hit-stop restore (delta is scaled by time_scale, so divide back out).
+	if _hitstop_left > 0.0:
+		_hitstop_left -= delta / maxf(Engine.time_scale, 0.001)
+		if _hitstop_left <= 0.0:
+			Engine.time_scale = 1.0
+			_hitstop_left = 0.0
+	# Floating damage numbers.
+	for i in _dmg_labels.size():
+		if _dmg_life[i] > 0.0:
+			_dmg_life[i] -= delta
+			var l: Label = _dmg_labels[i]
+			l.position.y -= 55.0 * delta
+			l.modulate.a = clampf(_dmg_life[i] / 0.5, 0.0, 1.0)
+	# Flash lights decay.
+	for fl in _flash_lights:
+		if fl.energy > 0.0:
+			fl.energy = maxf(0.0, fl.energy - delta * 9.0)
+	# Tip light follows the active weapon.
+	if weapon == Weapon.BLADE and _whip.visible_weapon:
+		_tip_light.position = _whip.tip_pos()
+		_tip_light.color = Color(0.5, 1.0, 1.0)
+		_tip_light.energy = 0.5 + _whip.spin_ratio * 0.6
+	elif weapon == Weapon.CHAKRA and _chakra.visible_weapon:
+		_tip_light.position = _chakra.disc_pos()
+		_tip_light.color = Color(1.0, 0.6, 0.25)
+		_tip_light.energy = 0.5 + _chakra.rpm * 0.6
+	else:
+		_tip_light.energy = 0.0
 	# Camera shake
 	_shake = maxf(0.0, _shake - delta * 2.0)
 	_world.position = Vector2(_rng.randf_range(-1.0, 1.0), _rng.randf_range(-1.0, 1.0)) * _shake * 6.0
@@ -515,7 +676,7 @@ func _update_weapon_hits(_delta: float) -> void:
 					var dmg := 1
 					if tip and spin >= 0.9:
 						dmg = 2
-					_apply_hit(e, dmg, spin, dir, speed)
+					_apply_hit(e, dmg, spin, dir, speed, s["pos"])
 	elif weapon == Weapon.CHAKRA:
 		if _chakra.rpm <= 0.25:
 			return
@@ -530,21 +691,32 @@ func _update_weapon_hits(_delta: float) -> void:
 				var dmg := 1
 				if _chakra.rpm >= 0.8:
 					dmg = 2
-				_apply_hit(e, dmg, _chakra.rpm, tangent, _chakra.rpm * 500.0)
+				_apply_hit(e, dmg, _chakra.rpm, tangent, _chakra.rpm * 500.0, dp)
 
-func _apply_hit(e, dmg_parts: int, spin_ratio: float, hit_dir: Vector2, hit_speed: float) -> void:
+func _apply_hit(e, dmg_parts: int, spin_ratio: float, hit_dir: Vector2, hit_speed: float, hit_pos: Vector2) -> void:
 	var res: Dictionary = e.take_hit(dmg_parts, spin_ratio, hit_dir)
 	if bool(res["deflected"]):
 		_audio.play_deflect()
 		_hud.show_popup("SHIELD DEFLECTS — SPIN ABOVE 65%")
+		_burst(hit_pos, Color(0.5, 0.75, 1.0), 0.5)
+		spawn_damage_number(hit_pos, "DEFLECT", Color(0.6, 0.8, 1.0))
 		return
 	if bool(res["shield_broken"]):
 		_audio.play_shield_break()
 		_hud.show_popup("SHIELD SHATTERED")
 		_shake = maxf(_shake, 0.4)
+		_burst(hit_pos, Color(0.5, 0.8, 1.0), 1.6)
+		_flash_light(hit_pos, Color(0.5, 0.8, 1.0), 2.5)
+		_hitstop(0.06)
+		spawn_damage_number(hit_pos, "SHIELD BREAK", Color(0.6, 0.9, 1.0))
+	# The chain bites: deflect the chain at the impact point.
+	if weapon == Weapon.BLADE:
+		_whip.apply_impact(hit_pos, hit_dir, 3.0)
 	for part in res["lost"]:
 		_spawn_debris(part, e.position, hit_dir, hit_speed)
 	_audio.play_hit(spin_ratio)
+	_burst(hit_pos, Color(1.0, 0.8, 0.4), 0.7)
+	spawn_damage_number(hit_pos, "-%d" % dmg_parts, Color(1.0, 0.95, 0.6))
 	if bool(res["died"]):
 		_kill_enemy(e, hit_dir)
 
@@ -553,6 +725,10 @@ func _kill_enemy(e, _hit_dir: Vector2) -> void:
 	score += 10 * (1 + wave / 3)
 	_audio.play_shatter()
 	_shake = maxf(_shake, 0.35)
+	_burst(e.position, Color(1.0, 0.7, 0.3), 1.8)
+	_flash_light(e.position, Color(1.0, 0.75, 0.4), 2.5)
+	_hitstop(0.08)
+	spawn_damage_number(e.position, "+%d" % (10 * (1 + wave / 3)), Color(1.0, 0.85, 0.3))
 	var orb_count := 3
 	if e.kind == EnemyScript.Kind.BOSS:
 		orb_count = 14
@@ -575,13 +751,16 @@ func _shatter_enemy(e, hit_dir: Vector2, _speed: float) -> void:
 func _spawn_debris(part: Dictionary, enemy_pos: Vector2, hit_dir: Vector2, hit_speed: float) -> void:
 	for d in _debris:
 		if not d.active:
-			var poly: PackedVector2Array = part["poly"]
 			var off: Vector2 = part["off"]
-			var moved := PackedVector2Array()
-			for p in poly:
-				moved.append(p + off)
 			var power := 240.0 + minf(hit_speed * 0.25, 320.0)
-			d.launch(moved, part["col"], enemy_pos + off, hit_dir, power, 1)
+			if part["tex"] != null:
+				d.launch_tex(part["tex"], part["tex_size"], enemy_pos + off, hit_dir, power, 1)
+			else:
+				var poly: PackedVector2Array = part["poly"]
+				var moved := PackedVector2Array()
+				for p in poly:
+					moved.append(p + off)
+				d.launch(moved, part["col"], enemy_pos + off, hit_dir, power, 1)
 			return
 
 func _spawn_orb(pos: Vector2, value: int) -> void:

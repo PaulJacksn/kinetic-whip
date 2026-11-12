@@ -17,6 +17,11 @@ var _last_angle: float = -PI * 0.5
 var _angle_init: bool = false
 var _spin_visual: float = 0.0
 var _time: float = 0.0
+var _disc_tex: Texture2D = null
+
+func _ready() -> void:
+	if ResourceLoader.exists("res://assets/art/weapons/chakra.png"):
+		_disc_tex = load("res://assets/art/weapons/chakra.png")
 
 func disc_pos() -> Vector2:
 	return core_pos + Vector2(cos(disc_angle), sin(disc_angle)) * ORBIT_RADIUS
@@ -57,18 +62,23 @@ func _draw() -> void:
 	# Glow
 	draw_circle(p, DISC_RADIUS + 18.0 + rpm * 10.0, Color(heat, 0.18))
 	draw_circle(p, DISC_RADIUS + 8.0, Color(heat, 0.30))
-	# Disc body
-	draw_circle(p, DISC_RADIUS, Color(0.08, 0.1, 0.16, 0.95))
-	draw_arc(p, DISC_RADIUS, 0.0, TAU, 40, Color(heat, 0.95), 3.0)
-	draw_arc(p, DISC_RADIUS * 0.55, 0.0, TAU, 32, Color(heat, 0.6), 2.0)
-	# Spokes, spinning
-	for i in 6:
-		var a := _spin_visual + float(i) * TAU / 6.0
-		var p1 := p + Vector2(cos(a), sin(a)) * (DISC_RADIUS * 0.55)
-		var p2 := p + Vector2(cos(a), sin(a)) * (DISC_RADIUS * 0.92)
-		draw_line(p1, p2, Color(heat, 0.85), 3.0, true)
-	# Hub
-	draw_circle(p, 7.0, Color(1, 1, 1, 0.9))
+	# Disc body: real sprite when available, drawn disc otherwise.
+	if _disc_tex != null:
+		draw_set_transform(p, _spin_visual, Vector2(0.75, 0.75))
+		draw_texture(_disc_tex, -_disc_tex.get_size() * 0.5)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	else:
+		draw_circle(p, DISC_RADIUS, Color(0.08, 0.1, 0.16, 0.95))
+		draw_arc(p, DISC_RADIUS, 0.0, TAU, 40, Color(heat, 0.95), 3.0)
+		draw_arc(p, DISC_RADIUS * 0.55, 0.0, TAU, 32, Color(heat, 0.6), 2.0)
+		# Spokes, spinning
+		for i in 6:
+			var a := _spin_visual + float(i) * TAU / 6.0
+			var p1 := p + Vector2(cos(a), sin(a)) * (DISC_RADIUS * 0.55)
+			var p2 := p + Vector2(cos(a), sin(a)) * (DISC_RADIUS * 0.92)
+			draw_line(p1, p2, Color(heat, 0.85), 3.0, true)
+		# Hub
+		draw_circle(p, 7.0, Color(1, 1, 1, 0.9))
 	# RPM ring around the disc
 	if rpm > 0.05:
 		draw_arc(p, DISC_RADIUS + 26.0, -PI * 0.5, -PI * 0.5 + TAU * rpm, 40, Color(heat, 0.8), 3.0)

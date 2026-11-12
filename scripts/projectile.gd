@@ -6,6 +6,11 @@ var active: bool = false
 var vel: Vector2 = Vector2.ZERO
 var damage: float = 6.0
 var _time: float = 0.0
+var _bolt_tex: Texture2D = null
+
+func _ready() -> void:
+	if ResourceLoader.exists("res://assets/art/weapons/bolt.png"):
+		_bolt_tex = load("res://assets/art/weapons/bolt.png")
 
 func fire(from: Vector2, target: Vector2, speed: float) -> void:
 	position = from
@@ -33,6 +38,11 @@ func _draw() -> void:
 	if not active:
 		return
 	var dir := vel.normalized()
+	if _bolt_tex != null:
+		draw_set_transform(Vector2.ZERO, dir.angle() + PI * 0.5, Vector2.ONE)
+		draw_texture(_bolt_tex, -_bolt_tex.get_size() * 0.5)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	var perp := Vector2(-dir.y, dir.x)
 	var tip := dir * 14.0
 	var tail := -dir * 10.0
